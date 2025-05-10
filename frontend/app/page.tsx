@@ -1,282 +1,401 @@
 "use client"
 
 import type React from "react"
-import Link from "next/link"
-import { useState } from "react"
-import AmenityCard from "@/components/amenity-card"
-import { Search, Loader2, List } from "lucide-react"
-import { useUserLocation } from "@/hooks/use-user-location"
+
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import LocationPermissionAlert from "@/components/location-permission-alert"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Loader2, MapPin, Send, AlertTriangle, Info } from "lucide-react"
+import { AmenityList } from "@/components/amenity-list"
+import Link from "next/link";
 
-// Types for our amenity data
-type Amenity = {
-  id: string
-  name: string
-  type: string
-  distance: string
-  openingHours: string
-  address?: string
-  specialTag?: string
-  isOpen?: boolean
-}
-
-export default function ChatPage() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [amenities, setAmenities] = useState<Amenity[]>([])
-  const [isLoading, setIsLoading] = useState(false)
+export default function Home() {
+  const [message, setMessage] = useState("")
+  const [response, setResponse] = useState("")
+    const [linkToAmenityList, setLinkToAmenityList] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [location, setLocation] = useState<{ lat: number; lon: number } | null>(null)
+  const [locationError, setLocationError] = useState<string | null>(null)
+  const [locationRequested, setLocationRequested] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
-  const [totalResults, setTotalResults] = useState(0)
+  const [debugInfo, setDebugInfo] = useState<string | null>(null)
+  const locationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Get user location from custom hook
-  const {
-    location: userLocation,
-    isLoading: isLocationLoading,
-    error: locationError,
-    permissionState,
-    requestLocation,
-  } = useUserLocation()
+  // Check for geolocation support and permissions on component mount
+  useEffect(() => {
+    checkGeolocationSupport()
+    return () => {
+      // Clear any pending timeouts when component unmounts
+      if (locationTimeoutRef.current) {
+        clearTimeout(locationTimeoutRef.current)
+      }
+    }
+  }, [])
 
-  // Simulated search function
-  const handleSearch = async (e: React.FormEvent) => {
+  const checkGeolocationSupport = () => {
+    // Check if geolocation is supported
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation is not supported by your browser")
+      setDebugInfo("Browser does not support Geolocation API")
+      return false
+    }
+
+    // On Mac/Safari, we need to handle permissions differently
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions
+          .query({ name: "geolocation" as PermissionName })
+          .then((permissionStatus) => {
+            setDebugInfo(`Geolocation permission status: ${permissionStatus.state}`)
+
+            if (permissionStatus.state === "granted") {
+              getLocation()
+            } else if (permissionStatus.state === "prompt") {
+              // We'll wait for user to click the button
+            } else if (permissionStatus.state === "denied") {
+              setLocationError("Location access has been denied. Please enable it in your browser settings.")
+            }
+
+            // Listen for changes to permission state
+            permissionStatus.onchange = () => {
+              setDebugInfo(`Geolocation permission changed to: ${permissionStatus.state}`)
+              if (permissionStatus.state === "granted") {
+                getLocation()
+              } else if (permissionStatus.state === "denied") {
+                setLocationError("Location access has been denied. Please enable it in your browser settings.")
+                setLocation(null)
+              }
+            }
+          })
+          .catch((error) => {
+            // Safari on Mac might not support permissions API fully
+            setDebugInfo(`Error checking permissions: ${error.message}. Trying direct geolocation request.`)
+            // Try getting location directly
+            getLocation()
+          })
+    } else {
+      // Fallback for browsers that don't support the permissions API
+      setDebugInfo("Permissions API not supported. Trying direct geolocation request.")
+      getLocation()
+    }
+
+    return true
+  }
+
+  const getLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation is not supported by your browser")
+      return
+    }
+
+    setLocationRequested(true)
+    setLocationError(null)
+    setLoading(true)
+    setDebugInfo("Requesting geolocation...")
+
+    // Set a timeout for geolocation request (Safari on Mac can hang)
+    locationTimeoutRef.current = setTimeout(() => {
+      setLoading(false)
+      setLocationError(
+          "Geolocation request timed out. Safari on Mac may require enabling location services in System Preferences.",
+      )
+      setDebugInfo("Manual timeout triggered after 15 seconds")
+    }, 15000)
+
+    try {
+      navigator.geolocation.getCurrentPosition(
+          (position) => {
+            // Clear the timeout since we got a response
+            if (locationTimeoutRef.current) {
+              clearTimeout(locationTimeoutRef.current)
+            }
+
+            setLocation({
+              lat: position.coords.latitude,
+              lon: position.coords.longitude,
+            })
+            setLoading(false)
+            setDebugInfo(
+                `Location obtained: ${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`,
+            )
+          },
+          (error) => {
+            // Clear the timeout since we got a response
+            if (locationTimeoutRef.current) {
+              clearTimeout(locationTimeoutRef.current)
+            }
+
+            setLoading(false)
+            setDebugInfo(`Geolocation error: ${error.code} - ${error.message}`)
+
+            switch (error.code) {
+              case error.PERMISSION_DENIED:
+                setLocationError(
+                    "Location access was denied. On Mac, ensure location services are enabled in System Preferences → Security & Privacy → Privacy → Location Services.",
+                )
+                break
+              case error.POSITION_UNAVAILABLE:
+                setLocationError(
+                    "Location information is unavailable. Try refreshing the page or check your internet connection.",
+                )
+                break
+              case error.TIMEOUT:
+                setLocationError(
+                    "The request to get your location timed out. This can happen on Safari/Mac. Try using Chrome or Firefox.",
+                )
+                break
+              default:
+                setLocationError(
+                    `An unknown error occurred (${error.code}). Try refreshing or using a different browser.`,
+                )
+                break
+            }
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0,
+          },
+      )
+    } catch (e) {
+      // Clear the timeout if there's an exception
+      if (locationTimeoutRef.current) {
+        clearTimeout(locationTimeoutRef.current)
+      }
+
+      setLoading(false)
+      setLocationError("An unexpected error occurred when trying to access your location.")
+      setDebugInfo(`Exception in geolocation request: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
+  // Fallback to manual location input
+  const [showManualInput, setShowManualInput] = useState(false)
+  const [manualLat, setManualLat] = useState("")
+  const [manualLon, setManualLon] = useState("")
+
+  const handleManualLocationSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const lat = Number.parseFloat(manualLat)
+    const lon = Number.parseFloat(manualLon)
+
+    if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      setLocationError(
+          "Please enter valid coordinates. Latitude must be between -90 and 90, longitude between -180 and 180.",
+      )
+      return
+    }
+
+    setLocation({ lat, lon })
+    setLocationError(null)
+    setDebugInfo(`Using manually entered location: ${lat.toFixed(6)}, ${lon.toFixed(6)}`)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!searchTerm.trim() || !userLocation) return
+    if (!message.trim()) return
+    if (!location) {
+      setLocationError("Location access is required to use this app")
+      getLocation()
+      return
+    }
 
-    setIsLoading(true)
+    setLoading(true)
+    setResponse("")
+    setHasSearched(true)
+    setDebugInfo(`Sending request with location: ${location.lat.toFixed(6)}, ${location.lon.toFixed(6)}`)
 
-    // Simulate API call with setTimeout
-    // In a real implementation, we would send userLocation to the backend
-    setTimeout(() => {
-      console.log("Searching with location:", userLocation)
-
-      // Mock data for amenities
-      const mockAmenities: Amenity[] = [
-        {
-          id: "1",
-          name: "Universitair Ziekenhuis Antwerpen",
-          type: "medical",
-          distance: `${calculateDistance(userLocation.lat, userLocation.lon, 51.1561, 4.4297)} km`,
-          openingHours: "Nu Open (24/7)",
-          address: "Wilrijkstraat 10, 2650 Edegem",
-          specialTag: "Rolstoeltoegankelijk: Ja",
-          isOpen: true,
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-        {
-          id: "2",
-          name: "Apotheek Centrum",
-          type: "medical",
-          distance: `${calculateDistance(userLocation.lat, userLocation.lon, 51.2204, 4.4051)} km`,
-          openingHours: "Open tot 18:00",
-          address: "Meir 12, 2000 Antwerpen",
-          isOpen: true,
-        },
-        {
-          id: "3",
-          name: "Huisarts Dr. Janssens",
-          type: "medical",
-          distance: `${calculateDistance(userLocation.lat, userLocation.lon, 51.2154, 4.3995)} km`,
-          openingHours: "Gesloten, opent morgen om 09:00",
-          address: "Nationalestraat 55, 2000 Antwerpen",
-          specialTag: "Huisbezoeken: Ja",
-          isOpen: false,
-        },
-        {
-          id: "4",
-          name: "Tandartspraktijk Smile",
-          type: "medical",
-          distance: `${calculateDistance(userLocation.lat, userLocation.lon, 51.2184, 4.3995)} km`,
-          openingHours: "Open tot 17:30",
-          address: "Groenplaats 33, 2000 Antwerpen",
-          isOpen: true,
-        },
-        {
-          id: "5",
-          name: "Medisch Centrum Noord",
-          type: "medical",
-          distance: `${calculateDistance(userLocation.lat, userLocation.lon, 51.2394, 4.4225)} km`,
-          openingHours: "Open tot 20:00",
-          address: "Noorderlaan 120, 2030 Antwerpen",
-          specialTag: "Afspraken zonder verwijzing: Ja",
-          isOpen: true,
-        },
-      ]
-
-      // Sort by distance (convert string "X.X km" to number for sorting)
-      const sortedAmenities = [...mockAmenities].sort((a, b) => {
-        const distA = Number.parseFloat(a.distance.split(" ")[0])
-        const distB = Number.parseFloat(b.distance.split(" ")[0])
-        return distA - distB
+        body: JSON.stringify({
+          message: message,
+          user_lat: location.lat,
+          user_lon: location.lon,
+        }),
       })
 
-      setAmenities(sortedAmenities.slice(0, 5))
-      setTotalResults(8) // Pretend there are 8 total results
-      setIsLoading(false)
-      setHasSearched(true)
-    }, 1500)
-  }
+      if (!res.ok) {
+        throw new Error(`Server responded with status: ${res.status}`)
+      }
 
-  // Calculate distance between two points using Haversine formula
-  function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371 // Radius of the earth in km
-    const dLat = deg2rad(lat2 - lat1)
-    const dLon = deg2rad(lon2 - lon1)
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-    const distance = R * c // Distance in km
-    return Math.round(distance * 10) / 10 // Round to 1 decimal place
+      const data = await res.json()
+      console.log("Response from server:", data.reply) // Log the response for debugging
+      setResponse(data.reply)
+      setLinkToAmenityList(data.link_to_amenities)
+      setMessage("")
+      setDebugInfo("Received response from server")
+    } catch (error) {
+      console.error("Error:", error)
+      setResponse("Sorry, something went wrong. Please try again.")
+      setDebugInfo(`Error in fetch: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setLoading(false)
+    }
   }
-
-  function deg2rad(deg: number): number {
-    return deg * (Math.PI / 180)
-  }
-
-  const handleShowOnMap = (id: string) => {
-    alert(`TODO: Show amenity ${id} on map`)
-  }
-
-  const handleMoreInfo = (id: string) => {
-    alert(`TODO: Show more info for amenity ${id}`)
-  }
-
-  const handleShowAllResults = () => {
-    alert(`TODO: Navigate to full results page with ${totalResults} results`)
-  }
-
-  // Check if location permission is granted
-  const isLocationGranted = permissionState === "granted" && userLocation !== null
 
   return (
-    <div className="h-screen flex flex-col bg-white">
-      {/* Full-page blocking message when location permission is not granted */}
-      {!isLocationGranted ? (
-        <div className="h-screen flex items-center justify-center p-4">
-          {isLocationLoading ? (
-            <div className="flex flex-col items-center justify-center">
-              <Loader2 className="h-12 w-12 text-[#CF0039] animate-spin mb-4" />
-              <p className="text-lg text-gray-600">Locatie bepalen...</p>
-            </div>
-          ) : (
-            <LocationPermissionAlert
-              permissionState={permissionState}
-              error={locationError}
-              onRetry={requestLocation}
-              isFullPage={true}
-            />
-          )}
-        </div>
-      ) : !hasSearched ? (
-        // Initial centered layout - only shown when location permission is granted
-        <div className="flex flex-col items-center justify-center h-full px-4">
-          <Link href="/browse-amenities" className="w-full block">
-            <Button
-                variant="outline"
-                className="w-full border-[#CF0039] text-[#CF0039] hover:bg-[#CF0039] hover:text-white transition-colors"
-            >
-              <List className="h-5 w-5 mr-2" />
-              Blader door Alle Voorzieningen
-            </Button>
-          </Link>
-          <div className="text-center mb-6">
-            <h1 className="text-3xl font-bold text-gray-800 mb-3">Welkom bij de Medische Voorzieningen Zoeker</h1>
-            <p className="text-lg text-gray-600 mb-2">Waarmee kan ik je helpen in Antwerpen?</p>
-            <p className="text-md text-gray-500">
-              Zoek een dokter, apotheek, ziekenhuis, of andere medische voorziening.
-            </p>
-          </div>
+      <main className="container mx-auto py-10 px-4 max-w-2xl">
+        <Card className="w-full">
+          <CardHeader>
+            <CardTitle className="text-center">Location Finder</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!location && (
+                <div className="flex flex-col items-center gap-4">
+                  {locationError && (
+                      <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle>Location Required</AlertTitle>
+                        <AlertDescription>{locationError}</AlertDescription>
+                      </Alert>
+                  )}
 
-          <form onSubmit={handleSearch} className="w-full max-w-xl">
-            <div className="flex">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Typ je vraag hier... (bijv. 'ziekenhuis in centrum')"
-                className="flex-grow p-3 border border-gray-400 rounded-l-lg focus:ring-2 focus:ring-[#CF0039] focus:border-transparent outline-none"
-              />
-              <button
-                type="submit"
-                className="bg-[#CF0039] text-white px-4 py-3 rounded-r-lg hover:bg-[#B8003A] transition-colors flex items-center"
-              >
-                <Search className="h-5 w-5 mr-1" />
-                <span>Zoek</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : (
-        // Layout after search - only shown when location permission is granted
-        <>
-          <div className="flex-grow overflow-y-auto p-4 pb-24">
-            {isLoading ? (
-              <p className="text-center text-gray-600 mt-8">Aan het zoeken naar medische voorzieningen...</p>
-            ) : amenities.length === 0 ? (
-              <p className="text-center text-gray-600 mt-8">
-                Geen resultaten gevonden voor '{searchTerm}'. Probeer iets anders?
-              </p>
-            ) : (
-              <div>
-                <h2 className="text-xl font-semibold mb-4 text-gray-700">Gevonden voor jou (top 5):</h2>
-                <div className="space-y-4">
-                  {amenities.map((amenity) => (
-                    <AmenityCard
-                      key={amenity.id}
-                      name={amenity.name}
-                      type={amenity.type}
-                      distance={amenity.distance}
-                      openingHours={amenity.openingHours}
-                      address={amenity.address}
-                      specialTag={amenity.specialTag}
-                      isOpen={amenity.isOpen}
-                      onShowOnMapClick={() => handleShowOnMap(amenity.id)}
-                      onMoreInfoClick={() => handleMoreInfo(amenity.id)}
-                    />
-                  ))}
+                  <Button
+                      onClick={getLocation}
+                      disabled={loading}
+                      variant={locationRequested && locationError ? "destructive" : "default"}
+                      size="lg"
+                      className="mt-2"
+                  >
+                    {loading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Getting location...
+                        </>
+                    ) : (
+                        <>
+                          <MapPin className="mr-2 h-4 w-4" />
+                          {locationRequested && locationError ? "Retry Location Access" : "Share your location to continue"}
+                        </>
+                    )}
+                  </Button>
+
+                  {locationRequested && locationError && (
+                      <Button variant="outline" onClick={() => setShowManualInput(!showManualInput)} className="mt-2">
+                        {showManualInput ? "Hide manual input" : "Enter location manually"}
+                      </Button>
+                  )}
+
+                  {showManualInput && (
+                      <form onSubmit={handleManualLocationSubmit} className="w-full max-w-md space-y-4 mt-2">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label htmlFor="latitude" className="text-sm font-medium">
+                              Latitude
+                            </label>
+                            <Input
+                                id="latitude"
+                                type="text"
+                                placeholder="e.g. 51.5074"
+                                value={manualLat}
+                                onChange={(e) => setManualLat(e.target.value)}
+                                required
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="longitude" className="text-sm font-medium">
+                              Longitude
+                            </label>
+                            <Input
+                                id="longitude"
+                                type="text"
+                                placeholder="e.g. -0.1278"
+                                value={manualLon}
+                                onChange={(e) => setManualLon(e.target.value)}
+                                required
+                            />
+                          </div>
+                        </div>
+                        <Button type="submit" className="w-full">
+                          Use this location
+                        </Button>
+                        <p className="text-xs text-muted-foreground text-center">
+                          You can find your coordinates using{" "}
+                          <a href="https://www.latlong.net/" target="_blank" rel="noopener noreferrer" className="underline">
+                            latlong.net
+                          </a>{" "}
+                          or Google Maps
+                        </p>
+                      </form>
+                  )}
+
+                  {!locationRequested && (
+                      <p className="text-sm text-center text-muted-foreground mt-2">
+                        This app requires your location to find nearby services
+                      </p>
+                  )}
+
+                  {locationRequested && locationError && (
+                      <Alert>
+                        <Info className="h-4 w-4" />
+                        <AlertTitle>Mac/Safari Users</AlertTitle>
+                        <AlertDescription>
+                          If you're using Safari on Mac, you may need to enable location services in System Preferences →
+                          Security & Privacy → Privacy → Location Services, and ensure Safari is checked.
+                        </AlertDescription>
+                      </Alert>
+                  )}
                 </div>
-
-                {totalResults > amenities.length && (
-                  <button onClick={handleShowAllResults} className="mt-4 text-[#CF0039] hover:underline font-medium">
-                    Toon alle {totalResults} resultaten...
-                  </button>
-                )}
-              </div>
             )}
-          </div>
 
-          {/* Fixed chat input at bottom */}
-          <div className="p-4 bg-gray-100 border-t border-gray-300 fixed bottom-0 left-0 right-0">
-            <form onSubmit={handleSearch} className="flex space-x-2 max-w-4xl mx-auto">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Typ je vraag hier... (bijv. 'ziekenhuis in centrum')"
-                className="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#CF0039] focus:border-transparent outline-none"
-                disabled={isLoading}
+            {location && (
+                <div className="text-center text-sm text-muted-foreground mb-4">
+                  <p className="flex items-center justify-center gap-1">
+                    <MapPin className="h-4 w-4" />
+                    Using location: {location.lat.toFixed(6)}, {location.lon.toFixed(6)}
+                  </p>
+                </div>
+            )}
+
+            {loading && hasSearched && (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                  <p className="text-muted-foreground">Searching for locations...</p>
+                </div>
+            )}
+
+            {response && !loading && (
+                <div className="mt-4">
+                  {response}
+                </div>
+            )}
+
+            {linkToAmenityList && !loading && (
+                <div className="mt-4">
+                    <Link href={linkToAmenityList} target="_blank" className="text-blue-500 underline">
+                        View nearby amenities
+                    </Link>
+                </div>
+            )}
+
+            {/* Debug information - uncomment during development */}
+            {/* {debugInfo && (
+            <div className="mt-4 p-2 bg-slate-100 rounded text-xs text-slate-700 font-mono">
+              <p>Debug: {debugInfo}</p>
+            </div>
+          )} */}
+          </CardContent>
+          <CardFooter>
+            <form onSubmit={handleSubmit} className="w-full flex gap-2">
+              <Input
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder={location ? "Ask about hospitals, pharmacies, etc. nearby..." : "Location access required"}
+                  disabled={loading || !location}
+                  className={!location ? "bg-muted" : ""}
               />
-              <button
-                type="submit"
-                className="bg-[#CF0039] text-white px-4 py-3 rounded-lg hover:bg-[#B8003A] transition-colors flex items-center"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <span className="flex items-center">
-                    <Loader2 className="h-5 w-5 mr-1 animate-spin" />
-                    Zoeken...
-                  </span>
-                ) : (
-                  <>
-                    <Search className="w-5 h-5 mr-1" />
-                    <span>Zoek</span>
-                  </>
-                )}
-              </button>
+              <Button type="submit" disabled={loading || !location}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
             </form>
-          </div>
-        </>
-      )}
-    </div>
+          </CardFooter>
+        </Card>
+      </main>
   )
 }

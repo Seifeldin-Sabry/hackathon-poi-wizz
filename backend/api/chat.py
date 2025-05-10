@@ -1,5 +1,7 @@
 import json
 import os
+import time
+import random
 from typing import List, Dict
 
 import google.generativeai as genai
@@ -28,6 +30,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str = Field(..., description="The bot's response.")
+    link_to_amenities: str = Field(..., description="Link to the amenities page.")
 
 
 def get_relevant_locations(
@@ -45,14 +48,14 @@ def get_relevant_locations(
         user_lat (float): The user's latitude.
         user_lon (float): The user's longitude.
         radius_m (int): The radius in meters to search within.
-        supabase (Client):  Supabase client instance.
 
     Returns:
         List[Dict]: A list of dictionaries, where each dictionary represents
                     a location that matches the criteria.
     """
-    # Fetch data from Supabase
-    response = supabase.from_("medical_amenity").select("*").eq("amenity_type", amenity_type).execute()
+    # Fetch data from Supabase for the given amenity types
+    response = supabase.table("medical_amenity").select("*").eq("amenity_type", amenity_type).execute()
+
     locations = response.data  # This will be a list of dictionaries
 
     relevant_locations = []
@@ -91,7 +94,7 @@ def is_open(metadata: str, current_time_str: str) -> bool:
         opening_hours = metadata_dict.get("opening_hours")
 
         if not opening_hours:
-            return True  # Assume open if no info is available
+            return False  # If no opening hours are provided, assume closed
 
         day = current_time_str[:2]  # e.g., "Mo"
         time_str = current_time_str[3:]  # e.g., "09:00"
@@ -173,6 +176,56 @@ def get_current_time_str() -> str:
     return datetime.now().strftime("%a %H:%M")  # e.g., "Mon 09:00"
 
 
+def analyze_intent_with_retry(user_query: str, max_retries: int = 5) -> object:
+    """
+    Attempts to analyze user intent with exponential backoff retry logic.
+
+    Args:
+        user_query (str): The user's query text
+        max_retries (int): Maximum number of retry attempts
+
+    Returns:
+        object: The intent object from analyze_intent
+
+    Raises:
+        ValueError: If all retry attempts fail
+    """
+    retries = 0
+    last_exception = None
+
+    while retries <= max_retries:
+        try:
+            intent = analyze_intent(user_query)
+
+            # Check if the intent is valid
+            if intent.valid_query:
+                return intent
+            else:
+                # Invalid intent but with a reason - retry with exponential backoff
+                print(f"Retry {retries + 1}/{max_retries}: Intent invalid - {intent.reason_invalid}")
+                last_exception = ValueError(intent.reason_invalid)
+        except Exception as e:
+            # Handle any other exceptions that might occur
+            print(f"Retry {retries + 1}/{max_retries}: Exception occurred - {str(e)}")
+            last_exception = e
+
+        # Increment retry counter
+        retries += 1
+
+        # Don't sleep if this was the last attempt
+        if retries <= max_retries:
+            # Calculate backoff time with jitter for distributed systems
+            backoff_time = min(0.1 * (2 ** retries) + random.uniform(0, 0.1), 5)
+            print(f"Waiting {backoff_time:.2f} seconds before next retry...")
+            time.sleep(backoff_time)
+
+    # If we've exhausted all retries, raise the last exception
+    if last_exception:
+        raise ValueError(f"All {max_retries} intent analysis attempts failed: {str(last_exception)}")
+    else:
+        raise ValueError(f"All {max_retries} intent analysis attempts failed without a specific error")
+
+
 @router.post("/", response_model=ChatResponse)
 async def chat(
         request: ChatRequest,
@@ -187,16 +240,14 @@ async def chat(
     user_lon = request.user_lon
 
     try:
-        # 1.  Determine intent (using your existing LLM code)
-        intent = analyze_intent(user_query)
+        # Use retry logic for intent analysis
+        intent = analyze_intent_with_retry(user_query, max_retries=10)
 
-        if not intent.valid_query:
-            return ChatResponse(reply=intent.reason_invalid)  # Or a more user-friendly message
-
+        # Extract necessary information from intent
         amenity_type = intent.amenity_types[0]  # Or handle multiple types if needed
         radius_m = intent.radius_m
 
-        # 2.  Get relevant locations from Supabase
+        # Get relevant locations from Supabase
         locations = get_relevant_locations(
             amenity_type, user_lat, user_lon, radius_m
         )
@@ -206,12 +257,19 @@ async def chat(
 
         current_time_str = get_current_time_str()
 
-        # 4.  Rank and format the locations
+        # Rank and format the locations
         response = rank_and_format_locations(
             locations, user_lat, user_lon, current_time_str
         )
 
-        return ChatResponse(reply=response)
+        generate_link = f"localhost:3002/amenities?lat={user_lat}&lon={user_lon}&amenity_type={amenity_type}"
 
+        return ChatResponse(reply=response, link_to_amenities=generate_link)
+
+    except ValueError as e:
+        # Handle intent analysis failures
+        return ChatResponse(
+            reply=f"I'm sorry, I couldn't understand what type of location you're looking for. Could you please rephrase your request?")
     except Exception as e:
+        # Handle other unexpected errors
         raise HTTPException(status_code=500, detail=str(e))
