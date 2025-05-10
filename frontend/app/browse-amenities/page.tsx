@@ -89,11 +89,11 @@ export default function BrowseAmenitiesPage() {
 
   // Fetch amenities when we have location data
   useEffect(() => {
-    // Only fetch if we have location (real or default) and permission isn't denied
-    if (!isLocationLoading && permissionState !== "denied") {
+    // Fetch amenities even if permission is denied (we'll use default location)
+    if (!isLocationLoading) {
       fetchAmenities()
     }
-  }, [userLocation, isLocationLoading, permissionState])
+  }, [userLocation, isLocationLoading])
 
   // Simulate API call to fetch amenities
   const fetchAmenities = async () => {
@@ -211,7 +211,7 @@ export default function BrowseAmenitiesPage() {
       },
     ]
 
-    // Calculate distances based on user location
+    // Calculate distances based on user location (real or default)
     const amenitiesWithDistance = mockAmenitiesData.map((amenity) => {
       const distanceValue = calculateDistance(
         userLocation.lat,
@@ -284,7 +284,7 @@ export default function BrowseAmenitiesPage() {
   }
 
   // Check if we should disable the UI due to denied permission
-  const isPermissionDenied = permissionState === "denied"
+  // const isPermissionDenied = permissionState === "denied"
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-5xl">
@@ -294,135 +294,132 @@ export default function BrowseAmenitiesPage() {
       <LocationPermissionAlert permissionState={permissionState} error={locationError} onRetry={requestLocation} />
 
       {/* Main Content - Only show if permission is not denied or we're still loading */}
-      {(!isPermissionDenied || isLocationLoading) && (
-        <>
-          {/* Filter Section */}
-          <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-            <h2 className="text-lg font-semibold mb-4">Filters</h2>
+      {/* {(!isPermissionDenied || isLocationLoading) && ( */}
+      <>
+        {/* Filter Section */}
+        <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+          <h2 className="text-lg font-semibold mb-4">Filters</h2>
 
-            {/* Search Input */}
-            <div className="mb-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                <Input
-                  type="text"
-                  placeholder="Zoek op naam, adres..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 border-gray-300"
-                />
-              </div>
-            </div>
-
-            {/* Type Filter */}
-            <div className="mb-4">
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Type voorziening</h3>
-              <div className="flex flex-wrap gap-2">
-                {(Object.keys(medicalTypeLabels) as MedicalType[]).map((type) => (
-                  <Button
-                    key={type}
-                    variant={selectedTypes.includes(type) ? "default" : "outline"}
-                    className={
-                      selectedTypes.includes(type)
-                        ? "bg-[#CF0039] hover:bg-[#B8003A] text-white border-[#CF0039]"
-                        : "border-gray-300 text-gray-700 hover:bg-gray-100"
-                    }
-                    onClick={() => toggleTypeSelection(type)}
-                  >
-                    {medicalTypeLabels[type]}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* Distance Filter */}
-            <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Afstand</h3>
-              <div className="w-full max-w-xs">
-                <Select
-                  value={selectedDistance}
-                  onValueChange={(value) => setSelectedDistance(value as DistanceOption)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecteer afstand" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1km">Binnen 1 km</SelectItem>
-                    <SelectItem value="3km">Binnen 3 km</SelectItem>
-                    <SelectItem value="5km">Binnen 5 km</SelectItem>
-                    <SelectItem value="all">Alle afstanden</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center mt-2 text-sm text-gray-500">
-                <MapPin size={16} className="mr-1" />
-                {isLocationLoading ? (
-                  <span className="flex items-center">
-                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                    Locatie bepalen...
-                  </span>
-                ) : isDefaultLocation ? (
-                  <span>Standaard locatie: Centrum Antwerpen</span>
-                ) : (
-                  <span>Uw huidige locatie wordt gebruikt</span>
-                )}
-              </div>
+          {/* Search Input */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <Input
+                type="text"
+                placeholder="Zoek op naam, adres..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 border-gray-300"
+              />
             </div>
           </div>
 
-          {/* Results Section */}
-          <div className="bg-white rounded-lg shadow-md p-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold">Resultaten</h2>
-              {!isLoading && !isLocationLoading && (
-                <span className="text-sm text-gray-500">{filteredAmenities.length} voorzieningen gevonden</span>
+          {/* Type Filter */}
+          <div className="mb-4">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Type voorziening</h3>
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(medicalTypeLabels) as MedicalType[]).map((type) => (
+                <Button
+                  key={type}
+                  variant={selectedTypes.includes(type) ? "default" : "outline"}
+                  className={
+                    selectedTypes.includes(type)
+                      ? "bg-[#CF0039] hover:bg-[#B8003A] text-white border-[#CF0039]"
+                      : "border-gray-300 text-gray-700 hover:bg-gray-100"
+                  }
+                  onClick={() => toggleTypeSelection(type)}
+                >
+                  {medicalTypeLabels[type]}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Distance Filter */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Afstand</h3>
+            <div className="w-full max-w-xs">
+              <Select value={selectedDistance} onValueChange={(value) => setSelectedDistance(value as DistanceOption)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecteer afstand" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1km">Binnen 1 km</SelectItem>
+                  <SelectItem value="3km">Binnen 3 km</SelectItem>
+                  <SelectItem value="5km">Binnen 5 km</SelectItem>
+                  <SelectItem value="all">Alle afstanden</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center mt-2 text-sm text-gray-500">
+              <MapPin size={16} className="mr-1" />
+              {isLocationLoading ? (
+                <span className="flex items-center">
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  Locatie bepalen...
+                </span>
+              ) : isDefaultLocation ? (
+                <span>Standaard locatie: Centrum Antwerpen</span>
+              ) : (
+                <span>Uw huidige locatie wordt gebruikt</span>
               )}
             </div>
+          </div>
+        </div>
 
-            {isLoading || isLocationLoading ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 text-[#CF0039] animate-spin mb-2" />
-                <p className="text-gray-600">{isLocationLoading ? "Locatie bepalen..." : "Voorzieningen laden..."}</p>
-              </div>
-            ) : filteredAmenities.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-600">Geen voorzieningen gevonden die aan uw criteria voldoen.</p>
-                <Button
-                  variant="outline"
-                  className="mt-4 border-[#CF0039] text-[#CF0039] hover:bg-[#CF0039] hover:text-white"
-                  onClick={() => {
-                    setSearchTerm("")
-                    setSelectedTypes([])
-                    setSelectedDistance("all")
-                  }}
-                >
-                  Filters wissen
-                </Button>
-              </div>
-            ) : (
-              <div className="flex flex-col space-y-4">
-                {filteredAmenities.map((amenity) => (
-                  <AmenityCard
-                    key={amenity.id}
-                    name={amenity.name}
-                    type={amenity.type}
-                    distance={amenity.distance}
-                    openingHours={amenity.openingHours}
-                    address={amenity.address}
-                    specialTag={amenity.specialTag}
-                    isOpen={amenity.isOpen}
-                    onShowOnMapClick={() => handleShowOnMap(amenity.id)}
-                    onMoreInfoClick={() => handleMoreInfo(amenity.id)}
-                  />
-                ))}
-              </div>
+        {/* Results Section */}
+        <div className="bg-white rounded-lg shadow-md p-4">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">Resultaten</h2>
+            {!isLoading && !isLocationLoading && (
+              <span className="text-sm text-gray-500">{filteredAmenities.length} voorzieningen gevonden</span>
             )}
           </div>
-        </>
-      )}
+
+          {isLoading || isLocationLoading ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 text-[#CF0039] animate-spin mb-2" />
+              <p className="text-gray-600">{isLocationLoading ? "Locatie bepalen..." : "Voorzieningen laden..."}</p>
+            </div>
+          ) : filteredAmenities.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-600">Geen voorzieningen gevonden die aan uw criteria voldoen.</p>
+              <Button
+                variant="outline"
+                className="mt-4 border-[#CF0039] text-[#CF0039] hover:bg-[#CF0039] hover:text-white"
+                onClick={() => {
+                  setSearchTerm("")
+                  setSelectedTypes([])
+                  setSelectedDistance("all")
+                }}
+              >
+                Filters wissen
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col space-y-4">
+              {filteredAmenities.map((amenity) => (
+                <AmenityCard
+                  key={amenity.id}
+                  name={amenity.name}
+                  type={amenity.type}
+                  distance={amenity.distance}
+                  openingHours={amenity.openingHours}
+                  address={amenity.address}
+                  specialTag={amenity.specialTag}
+                  isOpen={amenity.isOpen}
+                  onShowOnMapClick={() => handleShowOnMap(amenity.id)}
+                  onMoreInfoClick={() => handleMoreInfo(amenity.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </>
+      {/* )} */}
 
       {/* Permission Denied and Not Loading - Show Only Permission Message */}
-      {isPermissionDenied && !isLocationLoading && (
+      {/* {isPermissionDenied && !isLocationLoading && (
         <div className="bg-white rounded-lg shadow-md p-8 text-center">
           <div className="flex flex-col items-center justify-center">
             <MapPin className="h-16 w-16 text-[#CF0039] mb-4" />
@@ -436,7 +433,7 @@ export default function BrowseAmenitiesPage() {
             </Button>
           </div>
         </div>
-      )}
+      )} */}
     </div>
   )
 }

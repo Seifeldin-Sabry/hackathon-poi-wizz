@@ -48,18 +48,19 @@ export function useUserLocation() {
       },
       // Error callback
       (error) => {
-        console.error("Geolocation error:", error.message)
-
+        // Don't log permission denied as an error since it's an expected user choice
         if (error.code === 1) {
-          // Permission denied
+          // Permission denied - set state but don't log as error
           setError("Locatietoegang geweigerd")
           setPermissionState("denied")
         } else if (error.code === 2) {
           // Position unavailable
+          console.error("Geolocation error:", error.message)
           setError("Uw locatie kon niet worden bepaald")
           setPermissionState("unavailable")
         } else {
           // Timeout or unknown error
+          console.error("Geolocation error:", error.message)
           setError(`Kon uw locatie niet ophalen: ${error.message}`)
           setPermissionState("unavailable")
         }
@@ -90,4 +91,3 @@ export function useUserLocation() {
     requestLocation,
   }
 }
-
