@@ -257,6 +257,7 @@ ipython_config.py
 
 frontend/node_modules
 frontend/.next
+!frontend/lib
 /backend/.idea/copilot/chatSessions/00000000000.xd
 /backend/.idea/backend.iml
 /backend/.idea/misc.xml
