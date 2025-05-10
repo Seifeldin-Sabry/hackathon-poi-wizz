@@ -2,7 +2,6 @@ from fastapi import FastAPI
 from api import amenities, chat
 
 app = FastAPI()
-
 app.include_router(amenities.router, prefix="/amenities", tags=["Amenities"])
 app.include_router(chat.router, prefix="/chat", tags=["Chat"])
 
