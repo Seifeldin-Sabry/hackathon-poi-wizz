@@ -368,7 +368,7 @@ export default function Home() {
 
             {linkToAmenityList && !loading && (
                 <div className="mt-4">
-                    <Link href={linkToAmenityList} target="_blank" className="text-blue-500 underline">
+                    <Link href={"/amenities"} target="_blank" className="text-blue-500 underline">
                         View nearby amenities
                     </Link>
                 </div>
