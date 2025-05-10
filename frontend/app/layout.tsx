@@ -1,5 +1,9 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import {Button} from "@/components/ui/button";
+import {List} from "lucide-react";
+import Link from "next/link";
+import type React from "react";
 
 export const metadata: Metadata = {
   title: 'v0 App',
@@ -14,7 +18,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+      {children}
+      </body>
     </html>
   )
 }
