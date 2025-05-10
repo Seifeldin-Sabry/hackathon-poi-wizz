@@ -11,12 +11,14 @@ geolocator = Nominatim(user_agent="medical_data_enricher")
 geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
 reverse = RateLimiter(geolocator.reverse, min_delay_seconds=1)
 
+
 # Helper function to parse and clean metadata field
 def parse_metadata(metadata_str):
     try:
         return json.loads(metadata_str.replace("'", '"'))
     except Exception:
         return {}
+
 
 # Enrich each row
 enriched_rows = []

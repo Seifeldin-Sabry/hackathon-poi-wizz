@@ -21,7 +21,7 @@ class AmenityQueryIntent(BaseModel):
     reason_invalid: Optional[str] = None
 
 
-DEFAULT_RADIUS = 10000  # Default radius in meters
+DEFAULT_RADIUS = 50000  # Default radius in meters
 MEDICAL_AMENITIES = [
     "clinic", "hospital", "pharmacy", "dentist", "doctors",
     "nursing_home", "childcare", "veterinary", "social_facility"
@@ -109,12 +109,12 @@ def parse_gemini_response(response: GenerateContentResponse) -> Optional[Amenity
                 return None
     return None
 
-
-if __name__ == '__main__':
-    # Example usage
-    queries = ["I have the flu", "pharmacies open near me", "find the nearest bakery", "hospital within 2 miles", "Ik moet naar de spoed", "ik heb honger, ik wil eten"]
-    for q in queries:
-        intent = analyze_intent(q)
-        print(f"User query: '{q}'")
-        print(f"Intent: {intent.model_dump_json(indent=2)}")
-        print("-" * 20)
+#
+# if __name__ == '__main__':
+#     # Example usage
+#     queries = ["I have the flu", "pharmacies open near me", "find the nearest bakery", "hospital within 2 miles", "Ik moet naar de spoed", "ik heb honger, ik wil eten"]
+#     for q in queries:
+#         intent = analyze_intent(q)
+#         print(f"User query: '{q}'")
+#         print(f"Intent: {intent.model_dump_json(indent=2)}")
+#         print("-" * 20)
