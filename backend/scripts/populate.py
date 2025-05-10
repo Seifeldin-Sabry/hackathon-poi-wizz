@@ -1,24 +1,13 @@
 import ast
 import json
-import os
-
 import numpy as np
 import pandas as pd
-from dotenv import load_dotenv
-from supabase import create_client
 from sentence_transformers import SentenceTransformer
+from db import supabase
 
-load_dotenv()
-
-# Get Supabase credentials
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-
-# Create Supabase client
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Load the CSV data into pandas DataFrame
-df = pd.read_csv('../data/medical_amenities.csv', na_values=['nan', 'null', 'None', None, np.nan])
+df = pd.read_csv('../data/medical_amenities_cleaned.csv', na_values=['nan', 'null', 'None', None, np.nan])
 df['metadata'] = df['metadata'].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 
 model = SentenceTransformer("BAAI/bge-m3")

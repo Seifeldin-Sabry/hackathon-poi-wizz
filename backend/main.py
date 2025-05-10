@@ -1,8 +1,11 @@
 from fastapi import FastAPI
-from app.api import index, documents, search
+from api import amenities, chat
 
 app = FastAPI()
 
-app.include_router(index.router)
-app.include_router(documents.router, prefix="/documents")
-app.include_router(search.router, prefix="/search")
+app.include_router(amenities.router, prefix="/amenities", tags=["Amenities"])
+app.include_router(chat.router, prefix="/chat", tags=["Chat"])
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

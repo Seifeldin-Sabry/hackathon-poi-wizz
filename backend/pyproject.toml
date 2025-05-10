@@ -9,6 +9,7 @@ dependencies = [
     "datasets>=3.6.0",
     "dateparser>=1.2.1",
     "fastapi>=0.115.12",
+    "geopy>=2.4.1",
     "google-generativeai>=0.8.5",
     "jupyter>=1.1.1",
     "pandas>=2.2.3",
